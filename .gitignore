@@ -1,0 +1,53 @@
+# ── Secrets: never commit ────────────────────────────────────────────────────
+.env
+credentials.json
+token.json
+
+# ── Local working state ──────────────────────────────────────────────────────
+.tmp/
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+.gitignore.bak
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+
+# ── Large local archives ─────────────────────────────────────────────────────
+# The newsletter reads the Google Sheet, not these. Kept local so the repo
+# stays small enough for a cloud agent to clone in seconds.
+pitches/
+case_studies/
+reports/
+*.pdf
+no_brainer_review.md
+
+# ── Not part of the newsletter generator ─────────────────────────────────────
+# This repo is the weekly newsletter pipeline only. The ingestion, evaluation
+# and PDF-report tooling belongs to the Stock Picking Agent and stays local.
+#
+# push_to_sheet.py and update_sheet_rows.py are excluded deliberately: they are
+# the only code that can WRITE to the sheet. Keeping them out means a cloud run
+# has no capability to modify it, regardless of what any prompt says.
+CLAUDE.md
+tools/archive/
+tools/classify_titles.py
+tools/discover_substack_handles.py
+tools/extract_pdf_text.py
+tools/fetch_substack_rss.py
+tools/fetch_yellowbrick_web.py
+tools/generate_combined_pdf.py
+tools/generate_no_brainers_pdf.py
+tools/generate_no_brainers_report_2.py
+tools/generate_no_brainers_report_recent.py
+tools/generate_special_situations_pdf.py
+tools/generate_special_situations_report.py
+tools/generate_special_situations_report_recent.py
+tools/ingest_pitch.py
+tools/process_manual_pitches.py
+tools/push_to_sheet.py
+tools/update_sheet_rows.py
+workflows/evaluate_stock.md
+workflows/ingest_pitches.md
+workflows/process_case_study.md
+workflows/process_manual_pitches.md
