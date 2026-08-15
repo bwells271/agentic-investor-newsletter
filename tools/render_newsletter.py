@@ -5,8 +5,8 @@ Turns a newsletter JSON (from newsletter_data.py, after the writing step has
 filled in each entry's "summary") into Substack-ready output.
 
 Writes two files so either paste route works:
-  reports/newsletter_<type>_<date>.md    — markdown source of record
-  reports/newsletter_<type>_<date>.html  — paste this into the Substack editor;
+  reports/newsletter_<type>_<date>.md    markdown source of record
+  reports/newsletter_<type>_<date>.html  paste this into the Substack editor;
                                            headings, links and rules survive intact
 
 Entries with no written "summary" fall back to the sheet's Brief Summary, so a
@@ -68,7 +68,11 @@ PLACEHOLDER_TICKERS = {"UNKNOWN", "N/A", "NA", "NONE", "TBD", "-", "?"}
 
 
 def heading(e: dict) -> str:
-    """`TICKER — Company`, dropping placeholder tickers.
+    """`Company (TICKER)`, dropping placeholder tickers.
+
+    Parentheses rather than a dash: em dashes are the most recognisable tell of
+    machine-written copy, and the whole point of the humanizer pass is that this
+    newsletter does not read that way. No separator in the template may use one.
 
     Some pitches are written about unnamed companies (thrift conversions, for
     instance), where the sheet carries UNKNOWN. Printing that in a headline
@@ -79,13 +83,13 @@ def heading(e: dict) -> str:
     if ticker.upper() in PLACEHOLDER_TICKERS:
         ticker = ""
     if ticker and company:
-        return f"{ticker} — {company}"
+        return f"{company} ({ticker})"
     return company or ticker or "Untitled"
 
 
 def build_markdown(data: dict, title_date: str) -> str:
     kind = data["kind"]
-    out = [f"# {TITLES[kind]} — {title_date}", "", INTROS[kind], ""]
+    out = [f"# {TITLES[kind]} ({title_date})", "", INTROS[kind], ""]
 
     for cat in data["category_order"]:
         entries = [e for e in data["entries"] if e["category"] == cat]
@@ -116,7 +120,7 @@ def build_html(data: dict, title_date: str) -> str:
     kind = data["kind"]
     esc = html.escape
     parts = [
-        "<h1>%s — %s</h1>" % (esc(TITLES[kind]), esc(title_date)),
+        "<h1>%s (%s)</h1>" % (esc(TITLES[kind]), esc(title_date)),
         "<p>%s</p>" % esc(INTROS[kind]),
     ]
     for cat in data["category_order"]:
@@ -139,7 +143,7 @@ def build_html(data: dict, title_date: str) -> str:
     body = "\n".join(parts)
     return (
         "<!doctype html><meta charset=\"utf-8\">"
-        "<title>%s — %s</title>\n%s\n" % (esc(TITLES[kind]), esc(title_date), body)
+        "<title>%s (%s)</title>\n%s\n" % (esc(TITLES[kind]), esc(title_date), body)
     )
 
 
@@ -159,8 +163,22 @@ def main() -> None:
     md_path = out_dir / f"newsletter_{kind}_{gen}.md"
     html_path = out_dir / f"newsletter_{kind}_{gen}.html"
 
-    md_path.write_text(build_markdown(data, title_date), encoding="utf-8")
-    html_path.write_text(build_html(data, title_date), encoding="utf-8")
+    md = build_markdown(data, title_date)
+    html = build_html(data, title_date)
+
+    # Nothing reaches Substack with an em or en dash in it. The copy gate checks
+    # the summaries, but the template used to smuggle its own in through the
+    # headings, so the finished document is checked too.
+    for label, text in (("markdown", md), ("html", html)):
+        bad = [ln for ln in text.splitlines() if "\u2014" in ln or "\u2013" in ln]
+        if bad:
+            print(f"\n  refusing to write: {len(bad)} em/en dash(es) in the {label}:")
+            for ln in bad[:5]:
+                print("    " + ln.strip()[:100])
+            sys.exit("  Fix the template or the copy, then render again.")
+
+    md_path.write_text(md, encoding="utf-8")
+    html_path.write_text(html, encoding="utf-8")
 
     written = sum(1 for e in data["entries"] if (e.get("summary") or "").strip())
     print(f"[{kind}] {data['total_selected']} entries across {len(data['category_order'])} categories")
