@@ -377,6 +377,9 @@ def build(kind: str, days: int, limit: int, as_of: date, ignore_dates: bool = Fa
     return {
         "kind": kind,
         "generated": as_of.isoformat(),
+        # The renderer titles the issue with the window. A backfill ignores the
+        # window entirely, so it must not be presented as a week's worth of news.
+        "ignore_dates": ignore_dates,
         "window_start": cutoff.isoformat(),
         "window_end": as_of.isoformat(),
         "total_selected": len(entries),

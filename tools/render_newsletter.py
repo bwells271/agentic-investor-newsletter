@@ -87,6 +87,38 @@ def heading(e: dict) -> str:
     return company or ticker or "Untitled"
 
 
+def title_period(data: dict) -> str:
+    """The week the issue covers, as a readable range.
+
+    A backfill has no meaningful window (it ranks the whole sheet regardless of
+    date), so it falls back to the generation date rather than claiming to cover
+    a week it did not.
+    """
+    gen = data.get("generated") or date.today().isoformat()
+    gen_str = _long_date(date.fromisoformat(gen))
+
+    if data.get("ignore_dates"):
+        return gen_str
+
+    start, end = data.get("window_start"), data.get("window_end")
+    if not (start and end):
+        return gen_str
+
+    a, b = date.fromisoformat(start), date.fromisoformat(end)
+    if a == b:
+        return _long_date(b)
+    if a.year != b.year:
+        return f"{_long_date(a)} to {_long_date(b)}"
+    if a.month != b.month:
+        return f"{a.strftime('%B')} {a.day} to {_long_date(b)}"
+    return f"{a.strftime('%B')} {a.day} to {b.day}, {b.year}"
+
+
+def _long_date(d: date) -> str:
+    # Built by hand rather than with %-d, which is not portable.
+    return f"{d.strftime('%B')} {d.day}, {d.year}"
+
+
 def build_markdown(data: dict, title_date: str) -> str:
     kind = data["kind"]
     out = [f"# {TITLES[kind]} ({title_date})", "", INTROS[kind], ""]
@@ -156,7 +188,7 @@ def main() -> None:
     data = json.loads(Path(args.input).read_text(encoding="utf-8"))
     kind = data["kind"]
     gen = data.get("generated") or date.today().isoformat()
-    title_date = date.fromisoformat(gen).strftime("%B %d, %Y")
+    title_date = title_period(data)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
