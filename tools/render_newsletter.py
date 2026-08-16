@@ -127,7 +127,7 @@ def build_markdown(data: dict, title_date: str) -> str:
         entries = [e for e in data["entries"] if e["category"] == cat]
         if not entries:
             continue
-        out.append(f"## {cat}")
+        out.append(f"### {cat}")
         out.append("")
         for e in entries:
             # Bold, not a heading. Substack renders even an h3 at display size,
@@ -162,7 +162,7 @@ def build_html(data: dict, title_date: str) -> str:
         entries = [e for e in data["entries"] if e["category"] == cat]
         if not entries:
             continue
-        parts.append("<h2>%s</h2>" % esc(cat))
+        parts.append("<h3>%s</h3>" % esc(cat))
         for e in entries:
             parts.append(
                 '<p style="margin:1.4em 0 0.4em"><strong style="font-size:1.15em">'
@@ -200,8 +200,8 @@ PAGE = """<!doctype html><meta charset="utf-8">
          font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Georgia, serif;
          color: #1a1a1a; background: #fff; }
   h1 { font-size: 1.9em; line-height: 1.2; }
-  h2 { font-size: 1.15em; text-transform: uppercase; letter-spacing: .06em;
-       color: #666; margin: 2.4em 0 .2em; }
+  h3 { font-size: 1.05em; text-transform: uppercase; letter-spacing: .06em;
+       color: #666; margin: 2.4em 0 .2em; font-weight: 600; }
   a { color: #1a1a1a; }
   hr { border: 0; border-top: 1px solid #e3e3e3; margin: 2em 0; }
   #bar { position: sticky; top: 0; background: #fff; padding: .9rem 0; z-index: 5;
