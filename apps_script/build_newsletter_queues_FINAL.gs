@@ -92,6 +92,8 @@ function buildNewsletterQueues() {
   var cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - DAYS);
   cutoff.setHours(0, 0, 0, 0);
+  var windowEnd = new Date();
+  windowEnd.setHours(0, 0, 0, 0);
 
   var candidates = [];
   for (var i = 0; i < n; i++) {
@@ -110,7 +112,8 @@ function buildNewsletterQueues() {
 
   candidates.sort(function (a, b) { return b.score - a.score; });
 
-  var specials = candidates.filter(function (c) { return c.isSpecial; }).slice(0, LIMIT);
+  var allSpecials = candidates.filter(function (c) { return c.isSpecial; });
+  var specials = allSpecials.slice(0, LIMIT);
   var pitches  = candidates.slice(0, LIMIT);
 
   Logger.log((IGNORE_DATES ? 'BACKFILL (dates ignored): ' : 'In window: ') + candidates.length +
@@ -124,7 +127,16 @@ function buildNewsletterQueues() {
   var dest = openDestination();
   writeQueue(dest, 'Special Situations Queue', specials, rowData);
   writeQueue(dest, 'Stock Pitches Queue',      pitches,  rowData);
-  writeStatus(dest, n, candidates.length, specials.length, pitches.length, secs(started));
+  writeStatus(dest, {
+    scanned: n,
+    inWindow: candidates.length,
+    specialsAvailable: allSpecials.length,
+    specialsQueued: specials.length,
+    pitchesQueued: pitches.length,
+    cutoff: cutoff,
+    windowEnd: windowEnd,
+    elapsed: secs(started)
+  });
 
   Logger.log('Destination: ' + dest.getUrl());
   Logger.log('Destination ID: ' + dest.getId());
@@ -243,19 +255,47 @@ function writeQueue(dest, tabName, picks, rowData) {
   sheet.setFrozenRows(1);
 }
 
-function writeStatus(dest, scanned, inWindow, nSpecial, nPitches, elapsed) {
+function writeStatus(dest, info) {
   var sheet = dest.getSheetByName('Status') || dest.insertSheet('Status');
   sheet.clear();
-  sheet.getRange(1, 1, 7, 2).setValues([
+
+  // Window Start and Window End are read by the newsletter renderer, which
+  // titles each issue with the period it covers. Without them it can only print
+  // the day it ran, which tells the reader nothing about what is inside.
+  //
+  // The overflow rows matter for a different reason: a week with more than
+  // LIMIT qualifying pitches loses the remainder for good, because next week's
+  // window has already moved past them. Silent truncation would look identical
+  // to a quiet week, so it is written down.
+  var fmt = function (d) {
+    return Utilities.formatDate(d, Session.getScriptTimeZone() || 'America/New_York', 'yyyy-MM-dd');
+  };
+  var na = IGNORE_DATES ? 'n/a (backfill)' : null;
+
+  sheet.getRange(1, 1, 12, 2).setValues([
     ['Last refreshed', new Date().toISOString()],
-    ['Rows scanned', scanned],
     ['Mode', IGNORE_DATES ? 'BACKFILL - dates ignored' : 'Normal - last ' + DAYS + ' days'],
-    ['Window (days)', IGNORE_DATES ? 'n/a' : DAYS],
-    ['Pitches in window', inWindow],
-    ['Special Situations queued', nSpecial],
-    ['Stock Pitches queued', nPitches]
+    ['Window Start', na || fmt(info.cutoff)],
+    ['Window End', na || fmt(info.windowEnd)],
+    ['Window (days)', na || DAYS],
+    ['Rows scanned', info.scanned],
+    ['Pitches in window', info.inWindow],
+    ['Special Situations queued', info.specialsQueued],
+    ['Special Situations available', info.specialsAvailable],
+    ['Stock Pitches queued', info.pitchesQueued],
+    ['Overflow dropped', overflowNote(info)],
+    ['Run seconds', info.elapsed]
   ]);
-  sheet.getRange(8, 1, 1, 2).setValues([['Run seconds', elapsed]]);
+  sheet.setColumnWidth(1, 220);
+}
+
+/** Human-readable note about anything the LIMIT cut off. */
+function overflowNote(info) {
+  var lostSpecial = Math.max(0, info.specialsAvailable - info.specialsQueued);
+  var lostPitches = Math.max(0, info.inWindow - info.pitchesQueued);
+  if (!lostSpecial && !lostPitches) return 'none';
+  return 'specials ' + lostSpecial + ', pitches ' + lostPitches +
+         ' (raise LIMIT above ' + LIMIT + ' to keep them)';
 }
 
 /** Run once to install the weekly trigger. Fires Mondays around 4am. */

@@ -130,7 +130,10 @@ def build_markdown(data: dict, title_date: str) -> str:
         out.append(f"## {cat}")
         out.append("")
         for e in entries:
-            out.append(f"### {heading(e)}")
+            # Bold, not a heading. Substack renders even an h3 at display size,
+            # which swamps a 50-entry digest. The company name only needs to
+            # outrank body text, not shout.
+            out.append(f"**{heading(e)}**")
             out.append("")
             summary = entry_summary(e)
             if summary:
@@ -161,7 +164,10 @@ def build_html(data: dict, title_date: str) -> str:
             continue
         parts.append("<h2>%s</h2>" % esc(cat))
         for e in entries:
-            parts.append("<h3>%s</h3>" % esc(heading(e)))
+            parts.append(
+                '<p style="margin:1.4em 0 0.4em"><strong style="font-size:1.15em">'
+                "%s</strong></p>" % esc(heading(e))
+            )
             summary = entry_summary(e)
             if summary:
                 for para in re.split(r"\n{2,}", summary):
@@ -173,10 +179,93 @@ def build_html(data: dict, title_date: str) -> str:
         parts.append("<hr>")
     parts.append("<p><em>%s</em></p>" % esc(DISCLAIMER.strip("*")))
     body = "\n".join(parts)
-    return (
-        "<!doctype html><meta charset=\"utf-8\">"
-        "<title>%s (%s)</title>\n%s\n" % (esc(TITLES[kind]), esc(title_date), body)
-    )
+    return PAGE % {
+        "title": esc("%s (%s)" % (TITLES[kind], title_date)),
+        "body": body,
+    }
+
+
+# One button that puts the rendered article on the clipboard as rich text, so a
+# Substack paste keeps bold, links and dividers. Copying the raw HTML source
+# instead would paste as visible markup, and hand-dragging a 50-entry selection
+# tends to clip the first or last line.
+PAGE = """<!doctype html><meta charset="utf-8">
+<title>%(title)s</title>
+<style>
+  /* Explicit light background. This page mirrors how the issue will look in
+     Substack, which is light, and a viewer in dark mode would otherwise show
+     dark text on its own dark ground. */
+  html { background: #fff; }
+  body { max-width: 44rem; margin: 2rem auto; padding: 0 1.25rem;
+         font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Georgia, serif;
+         color: #1a1a1a; background: #fff; }
+  h1 { font-size: 1.9em; line-height: 1.2; }
+  h2 { font-size: 1.15em; text-transform: uppercase; letter-spacing: .06em;
+       color: #666; margin: 2.4em 0 .2em; }
+  a { color: #1a1a1a; }
+  hr { border: 0; border-top: 1px solid #e3e3e3; margin: 2em 0; }
+  #bar { position: sticky; top: 0; background: #fff; padding: .9rem 0; z-index: 5;
+         border-bottom: 1px solid #eee; margin-bottom: 1.5rem; }
+  #copy { font: inherit; font-size: .95rem; padding: .55rem 1.1rem; cursor: pointer;
+          border: 1px solid #1a1a1a; background: #1a1a1a; color: #fff; border-radius: 6px; }
+  #copy:hover { background: #333; }
+  #done { margin-left: .8rem; color: #157f3d; font-size: .9rem; visibility: hidden; }
+</style>
+<div id="bar">
+  <button id="copy">Copy for Substack</button>
+  <span id="done">Copied. Paste into the Substack editor.</span>
+</div>
+<article id="article">
+%(body)s
+</article>
+<script>
+document.getElementById('copy').addEventListener('click', async function () {
+  var article = document.getElementById('article');
+  var done = document.getElementById('done');
+
+  function say(msg, ok) {
+    done.textContent = msg;
+    done.style.color = ok ? '#157f3d' : '#a3261b';
+    done.style.visibility = 'visible';
+    setTimeout(function () { done.style.visibility = 'hidden'; }, 4000);
+  }
+
+  // Rich HTML on the clipboard is what makes the Substack paste keep bold text,
+  // links and dividers. Needs a secure context, which file:// satisfies in
+  // Chrome and Safari but a data: URL does not.
+  if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([article.innerHTML], {type: 'text/html'}),
+        'text/plain': new Blob([article.innerText], {type: 'text/plain'})
+      })]);
+      say('Copied. Paste into the Substack editor.', true);
+      return;
+    } catch (err) { /* fall through */ }
+  }
+
+  // Select-and-copy works in more places and still carries formatting.
+  try {
+    var range = document.createRange();
+    range.selectNodeContents(article);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    var ok = document.execCommand('copy');
+    sel.removeAllRanges();
+    if (ok) { say('Copied. Paste into the Substack editor.', true); return; }
+  } catch (err) { /* fall through */ }
+
+  // Last resort: leave the article selected so one keystroke finishes the job.
+  var range2 = document.createRange();
+  range2.selectNodeContents(article);
+  var sel2 = window.getSelection();
+  sel2.removeAllRanges();
+  sel2.addRange(range2);
+  say('Selected the whole issue. Press Cmd+C to copy.', false);
+});
+</script>
+"""
 
 
 def main() -> None:
